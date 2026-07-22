@@ -1,6 +1,7 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { situationsStore } from "@/lifeline/storage/situations";
+import { lifelineEngine } from "@/lifeline/ai/engine";
 import type { LifelineSituation, SituationStatus } from "@/lifeline/types";
 
 export const Route = createFileRoute("/situation/$id")({
@@ -49,6 +50,7 @@ function SituationPage() {
   );
 
   const [observation, setObservation] = useState("");
+  const [isReanalyzing, setIsReanalyzing] = useState(false);
 
   if (!situation) {
     return (
@@ -75,12 +77,41 @@ function SituationPage() {
 
   const { analysis } = situation;
 
-  function addObservation() {
-    const content = observation.trim();
-    if (!content) return;
-    situationsStore.addObservation(situation!.id, content, "user");
+  async function addObservation() {
+  const content = observation.trim();
+
+  if (!content || isReanalyzing) return;
+
+  setIsReanalyzing(true);
+
+  try {
+    const updatedSituation = situationsStore.addObservation(
+      situation.id,
+      content,
+      "user",
+    );
+
+    if (!updatedSituation) {
+      throw new Error("Could not save observation.");
+    }
+
+    const updatedAnalysis = await lifelineEngine.continueSituation(
+      updatedSituation,
+      content,
+    );
+
+    situationsStore.updateAnalysis(
+      updatedSituation.id,
+      updatedAnalysis,
+    );
+
     setObservation("");
+  } catch (error) {
+    console.error(error);
+  } finally {
+    setIsReanalyzing(false);
   }
+}
 
   function onDelete() {
     if (typeof window !== "undefined") {
@@ -279,10 +310,10 @@ function SituationPage() {
               <button
                 type="button"
                 onClick={addObservation}
-                disabled={observation.trim().length === 0}
+                disabled={observation.trim().length === 0 || isReanalyzing}
                 className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-1.5 text-sm font-medium text-primary-foreground shadow-[0_0_0_1px_rgba(255,255,255,0.06)_inset,0_10px_30px_-12px_color-mix(in_oklab,var(--primary)_60%,transparent)] transition hover:brightness-110 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40 disabled:shadow-none disabled:hover:brightness-100"
               >
-                Add observation
+                {isReanalyzing ? "Re-evaluating..." : "Add observation"}
               </button>
             </div>
           </div>

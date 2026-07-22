@@ -5,9 +5,24 @@ import type { LifelineAnalysis } from "../types";
  * Lovable AI Gateway, or an on-device runtime) can be plugged in later
  * without changing UI code.
  */
+import type {
+  LifelineAnalysis,
+  LifelineSituation,
+} from "../types";
+
+export interface LifelineAIContext {
+  input: string;
+  situation?: LifelineSituation;
+  newObservation?: string;
+}
+
 export interface LifelineAIProvider {
   name: string;
-  analyzeProblem(input: string, signal?: AbortSignal): Promise<LifelineAnalysis>;
+
+  analyzeProblem(
+    context: LifelineAIContext,
+    signal?: AbortSignal
+  ): Promise<LifelineAnalysis>;
 }
 
 /**
@@ -16,8 +31,19 @@ export interface LifelineAIProvider {
  */
 export const placeholderProvider: LifelineAIProvider = {
   name: "placeholder",
-  async analyzeProblem(input: string): Promise<LifelineAnalysis> {
-    await new Promise((r) => setTimeout(r, 1200));
+
+  async analyzeProblem(context, signal): Promise<LifelineAnalysis> {
+    await new Promise((resolve, reject) => {
+      const timeout = setTimeout(resolve, 1200);
+
+      signal?.addEventListener("abort", () => {
+        clearTimeout(timeout);
+        reject(new DOMException("Analysis cancelled", "AbortError"));
+      });
+    });
+
+    const input = context.input;
+
     return {
       domain: "productivity",
       problemSummary: input.slice(0, 140),
