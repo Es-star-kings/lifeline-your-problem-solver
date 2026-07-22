@@ -21,7 +21,7 @@ export const Route = createFileRoute("/")({
       {
         property: "og:description",
         content:
-          "An adaptive AI workspace. Bring a situation, LIFELINE helps you move forward.",
+          "Describe any real-world situation. LIFELINE helps you understand it and find practical next steps, powered by Gemma.",
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
