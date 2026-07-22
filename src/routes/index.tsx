@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { lifelineEngine } from "@/lifeline/ai/engine";
 import { examples } from "@/lifeline/examples";
 import { situationsStore } from "@/lifeline/storage/situations";
-import type { LifelineSituation } from "@/lifeline/types";
+import type { LifelineAnalysis, LifelineSituation } from "@/lifeline/types";
 
 const MAX_CHARS = 2000;
 
