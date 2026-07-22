@@ -1,8 +1,10 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useRef, useState } from "react";
+import { Link, useNavigate } from "@tanstack/react-router";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { lifelineEngine } from "@/lifeline/ai/engine";
 import { examples } from "@/lifeline/examples";
-import type { LifelineAnalysis } from "@/lifeline/types";
+import { situationsStore } from "@/lifeline/storage/situations";
+import type { LifelineAnalysis, LifelineSituation } from "@/lifeline/types";
 
 const MAX_CHARS = 2000;
 
@@ -44,22 +46,28 @@ function Index() {
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [phase, setPhase] = useState<AnalysisPhase>(0);
-  const [analysis, setAnalysis] = useState<LifelineAnalysis | null>(null);
   const [error, setError] = useState<string | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const navigate = useNavigate();
+
+  const situations = useSyncExternalStore(
+    (cb) => situationsStore.subscribe(cb),
+    () => situationsStore.list(),
+    () => [] as LifelineSituation[],
+  );
 
   const disabled = input.trim().length === 0 || loading;
 
   async function onAnalyze() {
     setError(null);
-    setAnalysis(null);
     setLoading(true);
     setPhase(1);
     const t1 = setTimeout(() => setPhase(2), 500);
     const t2 = setTimeout(() => setPhase(3), 1000);
     try {
       const result = await lifelineEngine.analyze(input);
-      setAnalysis(result);
+      const situation = situationsStore.create(input, result);
+      navigate({ to: "/situation/$id", params: { id: situation.id } });
     } catch (e) {
       setError(e instanceof Error ? e.message : "Something went wrong.");
     } finally {
@@ -173,8 +181,43 @@ function Index() {
           </div>
         )}
 
-        {loading && !analysis && <AnalysisProgress phase={phase} />}
-        {analysis && <AnalysisView analysis={analysis} />}
+        {loading && <AnalysisProgress phase={phase} />}
+
+        {situations.length > 0 && !loading && (
+          <section className="mt-12">
+            <div className="flex items-center gap-3">
+              <h2 className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                Ongoing situations
+              </h2>
+              <div className="h-px flex-1 bg-border/70" />
+            </div>
+            <ul className="mt-4 space-y-2">
+              {situations.slice(0, 6).map((s) => (
+                <li key={s.id}>
+                  <Link
+                    to="/situation/$id"
+                    params={{ id: s.id }}
+                    className="group flex items-start justify-between gap-4 rounded-xl border border-border bg-card/60 px-4 py-3 backdrop-blur transition hover:-translate-y-0.5 hover:border-primary/40 hover:bg-card"
+                  >
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                        <span className="text-primary">{s.analysis.domain}</span>
+                        <span className="h-1 w-1 rounded-full bg-border" />
+                        <span>{s.status}</span>
+                        <span className="h-1 w-1 rounded-full bg-border" />
+                        <span>{s.observations.length} observation{s.observations.length === 1 ? "" : "s"}</span>
+                      </div>
+                      <div className="mt-1 truncate text-sm text-foreground/90">{s.title}</div>
+                    </div>
+                    <div className="shrink-0 text-[11px] tabular-nums text-muted-foreground/70">
+                      {new Date(s.updatedAt).toLocaleDateString()}
+                    </div>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
       </main>
 
       <footer className="relative border-t border-border/60 bg-background/60 backdrop-blur">
