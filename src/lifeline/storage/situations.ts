@@ -10,6 +10,8 @@ const KEY = "lifeline.situations.v1";
 type Listener = () => void;
 const listeners = new Set<Listener>();
 
+let cachedSnapshot: LifelineSituation[] | null = null;
+
 function isBrowser() {
   return typeof window !== "undefined" && typeof localStorage !== "undefined";
 }
@@ -29,6 +31,7 @@ function read(): LifelineSituation[] {
 function write(list: LifelineSituation[]) {
   if (!isBrowser()) return;
   localStorage.setItem(KEY, JSON.stringify(list));
+  cachedSnapshot = null;
   listeners.forEach((l) => l());
 }
 
@@ -50,7 +53,9 @@ export const situationsStore = {
     return () => listeners.delete(fn);
   },
   list(): LifelineSituation[] {
-    return read().sort((a, b) => (a.updatedAt < b.updatedAt ? 1 : -1));
+    if (cachedSnapshot) return cachedSnapshot;
+    cachedSnapshot = read().sort((a, b) => (a.updatedAt < b.updatedAt ? 1 : -1));
+    return cachedSnapshot;
   },
   get(id: string): LifelineSituation | undefined {
     return read().find((s) => s.id === id);
