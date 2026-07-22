@@ -29,3 +29,23 @@ export interface LifelineCase {
   input: string;
   analysis: LifelineAnalysis;
 }
+
+export type SituationStatus = "active" | "monitoring" | "resolved";
+
+export interface SituationObservation {
+  id: string;
+  content: string;
+  createdAt: string;
+  source: "user" | "lifeline";
+}
+
+export interface LifelineSituation {
+  id: string;
+  title: string;
+  input: string;
+  analysis: LifelineAnalysis;
+  observations: SituationObservation[];
+  status: SituationStatus;
+  createdAt: string;
+  updatedAt: string;
+}
