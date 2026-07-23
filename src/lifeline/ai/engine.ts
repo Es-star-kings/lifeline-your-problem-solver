@@ -1,8 +1,6 @@
-import type {
-  LifelineAnalysis,
-  LifelineSituation,
-} from "../types";
-import { placeholderProvider, type LifelineAIProvider } from "./provider";
+import type { LifelineAnalysis, LifelineSituation } from "../types";
+import type { LifelineAIProvider } from "./provider";
+import { selectProvider } from "./provider-selection";
 
 /**
  * LIFELINE AI Engine. Sits between the UI and the underlying AI provider.
@@ -10,10 +8,14 @@ import { placeholderProvider, type LifelineAIProvider } from "./provider";
  * caching, offline fallbacks, and local case persistence.
  */
 export class LifelineEngine {
-  constructor(private provider: LifelineAIProvider = placeholderProvider) {}
+  constructor(private provider: LifelineAIProvider = selectProvider()) {}
 
   setProvider(provider: LifelineAIProvider) {
     this.provider = provider;
+  }
+
+  getProviderName(): string {
+    return this.provider.name;
   }
 
   async analyze(

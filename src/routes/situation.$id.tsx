@@ -76,6 +76,7 @@ function SituationPage() {
   }
 
   const { analysis } = situation;
+  const situationId = situation.id;
 
   async function addObservation() {
   const content = observation.trim();
@@ -86,7 +87,7 @@ function SituationPage() {
 
   try {
     const updatedSituation = situationsStore.addObservation(
-      situation.id,
+      situationId,
       content,
       "user",
     );
