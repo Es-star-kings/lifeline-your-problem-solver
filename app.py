@@ -9,7 +9,7 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
-from transformers import AutoProcessor, Gemma4ForConditionalGeneration
+from transformers import AutoProcessor
 import uvicorn
 
 
@@ -20,8 +20,23 @@ ALLOWED_ORIGINS = [
 
 MODEL_PATH = os.getenv(
     "GEMMA_MODEL_PATH",
-    "/kaggle/input/models/google/gemma-4/other/gemma-4-e4b-it-qat-mobile-ct/1",
+    "/kaggle/input/models/google/gemma-4/other/gemma-4-e4b-it-qat-mobile-ct/2",
 )
+
+MODEL_AVAILABLE = False
+MODEL_LOAD_ERROR: str | None = None
+
+
+def import_gemma_model_class() -> type[Any] | None:
+    try:
+        from transformers import Gemma4ForConditionalGeneration
+        return Gemma4ForConditionalGeneration
+    except (ImportError, ModuleNotFoundError):
+        try:
+            from transformers.models.gemma4 import Gemma4ForConditionalGeneration
+            return Gemma4ForConditionalGeneration
+        except (ImportError, ModuleNotFoundError):
+            return None
 
 app = FastAPI(title="LIFELINE Gemma API", version="1.0.0")
 
@@ -60,14 +75,24 @@ class ErrorResponse(BaseModel):
 
 @lru_cache(maxsize=1)
 def load_model_and_processor() -> tuple[Any, Any]:
+    global MODEL_AVAILABLE, MODEL_LOAD_ERROR
+
+    model_class = import_gemma_model_class()
+    if model_class is None:
+        MODEL_AVAILABLE = False
+        MODEL_LOAD_ERROR = "Gemma 4 model class is unavailable in this Transformers installation."
+        raise ImportError(MODEL_LOAD_ERROR)
+
     processor = AutoProcessor.from_pretrained(MODEL_PATH, local_files_only=True)
-    model = Gemma4ForConditionalGeneration.from_pretrained(
+    model = model_class.from_pretrained(
         MODEL_PATH,
         torch_dtype="auto",
         device_map="auto",
         local_files_only=True,
     )
     model.eval()
+    MODEL_AVAILABLE = True
+    MODEL_LOAD_ERROR = None
     return model, processor
 
 
@@ -145,6 +170,8 @@ def extract_json_object(text: str) -> dict[str, Any]:
 
 
 def generate_text(prompt: str, system_prompt: str, temperature: float, max_new_tokens: int) -> str:
+    if not MODEL_AVAILABLE:
+        load_model_and_processor()
     model, processor = load_model_and_processor()
 
     final_prompt = (
@@ -197,11 +224,14 @@ def generate_text(prompt: str, system_prompt: str, temperature: float, max_new_t
 
 
 @app.get("/health")
-def health() -> dict[str, str]:
+def health() -> dict[str, str | bool | None]:
     return {
         "status": "ok",
         "service": "LIFELINE Gemma API",
         "model": "Gemma 4",
+        "model_available": MODEL_AVAILABLE,
+        "model_path": MODEL_PATH,
+        "model_error": MODEL_LOAD_ERROR,
     }
 
 
@@ -225,4 +255,12 @@ def generate(payload: GenerateRequest, request: Request) -> GenerateResponse:
 
 
 if __name__ == "__main__":
-    uvicorn.run("app:app", host="0.0.0.0", port=int(os.getenv("PORT", "8080")), reload=False)
+    try:
+        import asyncio
+
+        if asyncio.get_event_loop().is_running():
+            print("Event loop is already running; uvicorn startup skipped.")
+        else:
+            uvicorn.run("app:app", host="0.0.0.0", port=int(os.getenv("PORT", "8080")), reload=False)
+    except RuntimeError:
+        print("Unable to start uvicorn because an event loop is already running.")
