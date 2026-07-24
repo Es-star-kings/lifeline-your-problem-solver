@@ -2,7 +2,7 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { situationsStore } from "@/lifeline/storage/situations";
 import { lifelineEngine } from "@/lifeline/ai/engine";
-import type { LifelineSituation, SituationStatus } from "@/lifeline/types";
+import type { LifelineActionStep, LifelineSituation, SituationStatus } from "@/lifeline/types";
 
 export const Route = createFileRoute("/situation/$id")({
   head: () => ({
@@ -74,6 +74,13 @@ function SituationPage() {
 
   const { analysis } = situation;
   const situationId = situation.id;
+  const [stepState, setStepState] = useState<Record<string, boolean>>(() => {
+    const initial: Record<string, boolean> = {};
+    analysis.actionPlan.forEach((step) => {
+      initial[step.id] = step.status === "completed";
+    });
+    return initial;
+  });
 
   async function addObservation() {
     const content = observation.trim();
@@ -116,6 +123,18 @@ function SituationPage() {
       : analysis.urgency === "medium"
         ? "text-primary"
         : "text-muted-foreground";
+
+  const completedSteps = analysis.actionPlan.filter((step) => stepState[step.id]).length;
+  const progressPercent = Math.round((completedSteps / Math.max(analysis.actionPlan.length, 1)) * 100);
+
+  function toggleStep(step: LifelineActionStep) {
+    const nextValue = !stepState[step.id];
+    setStepState((current) => ({ ...current, [step.id]: nextValue }));
+    const enhanced = analysis.actionPlan.map((item) =>
+      item.id === step.id ? { ...item, status: nextValue ? "completed" : "pending" } : item,
+    );
+    situationsStore.updateAnalysis(situationId, { ...analysis, actionPlan: enhanced });
+  }
 
   const timeline = [
     {
@@ -211,11 +230,23 @@ function SituationPage() {
           </div>
         )}
 
-        <SectionCard eyebrow="Section 01" title="What LIFELINE understands">
-          <p className="text-sm leading-relaxed text-muted-foreground">{analysis.problemSummary}</p>
-          <p className="mt-4 text-[15px] leading-relaxed text-foreground/90">
-            {analysis.explanation}
-          </p>
+        <SectionCard eyebrow="Section 01" title="Problem understanding">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="rounded-full border border-border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-primary">
+              {analysis.category}
+            </span>
+            <span className={`rounded-full border border-border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] ${urgencyColor}`}>
+              {analysis.urgency} urgency
+            </span>
+          </div>
+          <p className="mt-4 text-sm leading-relaxed text-muted-foreground">{analysis.problemSummary}</p>
+          <p className="mt-3 text-[15px] leading-relaxed text-foreground/90">{analysis.explanation}</p>
+          <div className="mt-4 rounded-xl border border-border/70 bg-background/40 p-4 text-sm">
+            <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+              User intent
+            </div>
+            <p className="mt-1 text-foreground/90">{analysis.userIntent}</p>
+          </div>
           <details className="mt-5 rounded-lg border border-border/70 bg-background/40 px-4 py-3 text-sm">
             <summary className="cursor-pointer text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
               Original description
@@ -225,26 +256,101 @@ function SituationPage() {
         </SectionCard>
 
         {analysis.actionPlan.length > 0 && (
-          <SectionCard eyebrow="Section 02" title="What to do now">
-            <ol className="space-y-4">
-              {analysis.actionPlan.slice(0, 2).map((s) => (
-                <ActionRow key={s.step} step={s.step} title={s.title} body={s.description} />
+          <SectionCard eyebrow="Section 02" title="Action plan">
+            <div className="mb-4 flex items-center justify-between gap-3 rounded-xl border border-border/70 bg-background/40 px-3 py-2 text-sm">
+              <div>
+                <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                  Progress
+                </div>
+                <div className="mt-1 text-foreground/90">
+                  {completedSteps} of {analysis.actionPlan.length} steps complete
+                </div>
+              </div>
+              <div className="text-right">
+                <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                  Completion
+                </div>
+                <div className="mt-1 text-sm font-semibold text-foreground">{progressPercent}%</div>
+              </div>
+            </div>
+            <ol className="space-y-3">
+              {analysis.actionPlan.map((step) => (
+                <li key={step.id} className="rounded-xl border border-border/70 bg-background/40 p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                        Step {step.step}
+                      </div>
+                      <div className="mt-1 text-sm font-semibold text-foreground">{step.title}</div>
+                      <div className="mt-1 text-sm leading-relaxed text-muted-foreground">{step.description}</div>
+                      {step.timeframe && (
+                        <div className="mt-2 text-[11px] uppercase tracking-[0.16em] text-primary">
+                          {step.timeframe}
+                        </div>
+                      )}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => toggleStep(step)}
+                      className={`rounded-full border px-3 py-1 text-xs font-semibold transition ${
+                        stepState[step.id]
+                          ? "border-primary/40 bg-primary/10 text-primary"
+                          : "border-border text-muted-foreground hover:text-foreground"
+                      }`}
+                    >
+                      {stepState[step.id] ? "Done" : "Mark done"}
+                    </button>
+                  </div>
+                </li>
               ))}
             </ol>
           </SectionCard>
         )}
 
-        {analysis.actionPlan.length > 2 && (
-          <SectionCard eyebrow="Section 03" title="Next steps">
-            <ol className="space-y-4">
-              {analysis.actionPlan.slice(2).map((s) => (
-                <ActionRow key={s.step} step={s.step} title={s.title} body={s.description} />
+        {analysis.suggestedTools.length > 0 && (
+          <SectionCard eyebrow="Section 03" title="Learn & explore">
+            <div className="grid gap-3 md:grid-cols-2">
+              {analysis.suggestedTools.map((tool) => (
+                <div key={tool.id} className="rounded-xl border border-border/70 bg-background/40 p-4">
+                  <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-primary">
+                    {tool.type}
+                  </div>
+                  <div className="mt-2 text-sm font-semibold text-foreground">{tool.title}</div>
+                  <p className="mt-1 text-sm leading-relaxed text-muted-foreground">{tool.description}</p>
+                </div>
               ))}
-            </ol>
+            </div>
           </SectionCard>
         )}
 
-        <SectionCard eyebrow="Section 04" title="Situation timeline">
+        <SectionCard eyebrow="Section 04" title="Resources">
+          {analysis.resources.length > 0 ? (
+            <div className="space-y-3">
+              {analysis.resources.map((resource) => (
+                <div key={resource.id} className="rounded-xl border border-border/70 bg-background/40 p-4">
+                  <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                    {resource.kind}
+                  </div>
+                  <div className="mt-1 text-sm font-semibold text-foreground">{resource.title}</div>
+                  <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
+                    {resource.description}
+                  </p>
+                  {resource.locationHint && (
+                    <div className="mt-2 text-[11px] uppercase tracking-[0.16em] text-primary">
+                      {resource.locationHint}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="rounded-xl border border-dashed border-border/70 bg-background/40 p-6 text-sm text-muted-foreground">
+              Resources and nearby support will appear here as the workspace grows.
+            </div>
+          )}
+        </SectionCard>
+
+        <SectionCard eyebrow="Section 05" title="Situation timeline">
           <ol className="relative space-y-5 pl-6">
             <span
               aria-hidden
@@ -276,7 +382,7 @@ function SituationPage() {
           </ol>
         </SectionCard>
 
-        <SectionCard eyebrow="Section 05" title="Continue this situation">
+        <SectionCard eyebrow="Section 06" title="Continue this situation">
           <div className="text-lg font-semibold text-foreground">Did anything change?</div>
           <p className="mt-1 text-sm text-muted-foreground">
             Tell LIFELINE what you discovered, tried, or noticed next.
@@ -310,7 +416,7 @@ function SituationPage() {
         </SectionCard>
 
         {analysis.followUpQuestions.length > 0 && (
-          <SectionCard eyebrow="Section 06" title="Recommended tools & questions">
+          <SectionCard eyebrow="Section 07" title="Follow-up questions">
             <ul className="space-y-2">
               {analysis.followUpQuestions.map((q) => (
                 <li
