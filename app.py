@@ -1,15 +1,13 @@
 import json
 import os
 import re
-from functools import lru_cache
 from typing import Any
 
-import torch
+import requests
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
-from transformers import AutoProcessor
 import uvicorn
 
 
@@ -18,25 +16,17 @@ ALLOWED_ORIGINS = [
     "https://lifeline-your-problem-solver.vercel.app",
 ]
 
-MODEL_PATH = os.getenv(
-    "GEMMA_MODEL_PATH",
-    "/kaggle/input/models/google/gemma-4/other/gemma-4-e4b-it-qat-mobile-ct/2",
+# Kaggle Gemma API configuration
+KAGGLE_GEMMA_API_KEY = os.getenv("KAGGLE_GEMMA_API_KEY")
+KAGGLE_GEMMA_API_ENDPOINT = os.getenv(
+    "KAGGLE_GEMMA_API_ENDPOINT",
+    "https://api.kaggle.com/v1/llm/generate",
 )
 
-MODEL_AVAILABLE = False
-MODEL_LOAD_ERROR: str | None = None
-
-
-def import_gemma_model_class() -> type[Any] | None:
-    try:
-        from transformers import Gemma4ForConditionalGeneration
-        return Gemma4ForConditionalGeneration
-    except (ImportError, ModuleNotFoundError):
-        try:
-            from transformers.models.gemma4 import Gemma4ForConditionalGeneration
-            return Gemma4ForConditionalGeneration
-        except (ImportError, ModuleNotFoundError):
-            return None
+# Check if API credentials are configured
+API_CONFIGURED = bool(KAGGLE_GEMMA_API_KEY)
+API_AVAILABLE = False
+API_CHECK_MESSAGE: str | None = None
 
 app = FastAPI(title="LIFELINE Gemma API", version="1.0.0")
 
@@ -73,27 +63,17 @@ class ErrorResponse(BaseModel):
     detail: str
 
 
-@lru_cache(maxsize=1)
-def load_model_and_processor() -> tuple[Any, Any]:
-    global MODEL_AVAILABLE, MODEL_LOAD_ERROR
-
-    model_class = import_gemma_model_class()
-    if model_class is None:
-        MODEL_AVAILABLE = False
-        MODEL_LOAD_ERROR = "Gemma 4 model class is unavailable in this Transformers installation."
-        raise ImportError(MODEL_LOAD_ERROR)
-
-    processor = AutoProcessor.from_pretrained(MODEL_PATH, local_files_only=True)
-    model = model_class.from_pretrained(
-        MODEL_PATH,
-        torch_dtype="auto",
-        device_map="auto",
-        local_files_only=True,
-    )
-    model.eval()
-    MODEL_AVAILABLE = True
-    MODEL_LOAD_ERROR = None
-    return model, processor
+def check_api_credentials() -> None:
+    """Validate that Kaggle Gemma API credentials are configured."""
+    global API_AVAILABLE, API_CHECK_MESSAGE
+    
+    if not API_CONFIGURED:
+        API_AVAILABLE = False
+        API_CHECK_MESSAGE = "KAGGLE_GEMMA_API_KEY is not configured"
+        return
+    
+    API_AVAILABLE = True
+    API_CHECK_MESSAGE = None
 
 
 def build_structured_schema() -> dict[str, Any]:
@@ -169,69 +149,62 @@ def extract_json_object(text: str) -> dict[str, Any]:
     raise ValueError("model output was not valid JSON")
 
 
-def generate_text(prompt: str, system_prompt: str, temperature: float, max_new_tokens: int) -> str:
-    if not MODEL_AVAILABLE:
-        load_model_and_processor()
-    model, processor = load_model_and_processor()
-
+def generate_text_from_kaggle_api(
+    prompt: str, system_prompt: str, temperature: float, max_new_tokens: int
+) -> str:
+    """Call the Kaggle Gemma API to generate structured analysis."""
+    
+    if not API_AVAILABLE:
+        raise RuntimeError("Kaggle Gemma API is not available")
+    
     final_prompt = (
         (system_prompt or "You are LIFELINE, a calm practical assistant.")
         + "\nReturn ONLY a single JSON object that matches the requested schema.\n\n"
         + f"Use this schema:\n{json.dumps(build_structured_schema(), indent=2)}\n\n"
         + f"Problem: {prompt}"
     )
-
-    messages = [
-        {
-            "role": "user",
-            "content": [
-                {
-                    "type": "text",
-                    "text": final_prompt,
-                }
-            ],
-        }
-    ]
-
-    inputs = processor.apply_chat_template(
-        messages,
-        add_generation_prompt=True,
-        tokenize=True,
-        return_tensors="pt",
-    )
-
-    if isinstance(inputs, dict):
-        inputs = {
-            key: value.to(model.device) if hasattr(value, "to") else value
-            for key, value in inputs.items()
-        }
-    else:
-        inputs = inputs.to(model.device)
-
-    with torch.inference_mode():
-        outputs = model.generate(
-            **inputs if isinstance(inputs, dict) else {"input_ids": inputs},
-            max_new_tokens=max_new_tokens,
-            temperature=temperature,
-            do_sample=temperature > 0,
-            top_p=0.95,
-            repetition_penalty=1.1,
+    
+    headers = {
+        "Authorization": f"Bearer {KAGGLE_GEMMA_API_KEY}",
+        "Content-Type": "application/json",
+    }
+    
+    payload = {
+        "prompt": final_prompt,
+        "temperature": temperature,
+        "max_new_tokens": max_new_tokens,
+    }
+    
+    try:
+        response = requests.post(
+            KAGGLE_GEMMA_API_ENDPOINT,
+            json=payload,
+            headers=headers,
+            timeout=30,
         )
-
-    input_length = inputs.shape[-1] if hasattr(inputs, "shape") else inputs["input_ids"].shape[-1]
-    generated_text = processor.decode(outputs[0][input_length:], skip_special_tokens=True)
-    return generated_text.strip()
+        response.raise_for_status()
+        result = response.json()
+        
+        # Extract the generated text from the API response
+        # The exact key depends on Kaggle's API response format
+        generated_text = result.get("generated_text") or result.get("text") or str(result)
+        return generated_text.strip()
+    except requests.RequestException as exc:
+        raise RuntimeError(f"Kaggle API request failed: {str(exc)}")
+    except (KeyError, ValueError) as exc:
+        raise RuntimeError(f"Failed to parse Kaggle API response: {str(exc)}")
 
 
 @app.get("/health")
 def health() -> dict[str, str | bool | None]:
+    check_api_credentials()
     return {
         "status": "ok",
         "service": "LIFELINE Gemma API",
-        "model": "Gemma 4",
-        "model_available": MODEL_AVAILABLE,
-        "model_path": MODEL_PATH,
-        "model_error": MODEL_LOAD_ERROR,
+        "model": "Kaggle Gemma API",
+        "api_available": API_AVAILABLE,
+        "api_configured": API_CONFIGURED,
+        "api_check_message": API_CHECK_MESSAGE,
     }
 
 
@@ -241,7 +214,15 @@ def generate(payload: GenerateRequest, request: Request) -> GenerateResponse:
         raise HTTPException(status_code=400, detail="prompt is required")
 
     try:
-        raw_text = generate_text(
+        # Check API availability before attempting to generate
+        check_api_credentials()
+        
+        if not API_AVAILABLE:
+            # Use fallback if API is not available
+            fallback_payload = build_fallback_payload(payload.prompt)
+            return GenerateResponse(response=json.dumps(fallback_payload))
+        
+        raw_text = generate_text_from_kaggle_api(
             prompt=payload.prompt,
             system_prompt=payload.system_prompt or "",
             temperature=float(payload.temperature or 0.7),
@@ -250,6 +231,7 @@ def generate(payload: GenerateRequest, request: Request) -> GenerateResponse:
         parsed = extract_json_object(raw_text)
         return GenerateResponse(response=json.dumps(parsed))
     except Exception as exc:  # noqa: BLE001
+        # Always fall back to structured response on any error
         fallback_payload = build_fallback_payload(payload.prompt)
         return GenerateResponse(response=json.dumps(fallback_payload))
 
