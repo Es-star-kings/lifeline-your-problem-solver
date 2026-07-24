@@ -44,10 +44,7 @@ function SituationPage() {
     () => situationsStore.list(),
     () => [] as LifelineSituation[],
   );
-  const situation = useMemo(
-    () => situations.find((s) => s.id === id),
-    [situations, id],
-  );
+  const situation = useMemo(() => situations.find((s) => s.id === id), [situations, id]);
 
   const [observation, setObservation] = useState("");
   const [isReanalyzing, setIsReanalyzing] = useState(false);
@@ -79,40 +76,30 @@ function SituationPage() {
   const situationId = situation.id;
 
   async function addObservation() {
-  const content = observation.trim();
+    const content = observation.trim();
 
-  if (!content || isReanalyzing) return;
+    if (!content || isReanalyzing) return;
 
-  setIsReanalyzing(true);
+    setIsReanalyzing(true);
 
-  try {
-    const updatedSituation = situationsStore.addObservation(
-      situationId,
-      content,
-      "user",
-    );
+    try {
+      const updatedSituation = situationsStore.addObservation(situationId, content, "user");
 
-    if (!updatedSituation) {
-      throw new Error("Could not save observation.");
+      if (!updatedSituation) {
+        throw new Error("Could not save observation.");
+      }
+
+      const updatedAnalysis = await lifelineEngine.continueSituation(updatedSituation, content);
+
+      situationsStore.updateAnalysis(updatedSituation.id, updatedAnalysis);
+
+      setObservation("");
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setIsReanalyzing(false);
     }
-
-    const updatedAnalysis = await lifelineEngine.continueSituation(
-      updatedSituation,
-      content,
-    );
-
-    situationsStore.updateAnalysis(
-      updatedSituation.id,
-      updatedAnalysis,
-    );
-
-    setObservation("");
-  } catch (error) {
-    console.error(error);
-  } finally {
-    setIsReanalyzing(false);
   }
-}
 
   function onDelete() {
     if (typeof window !== "undefined") {
@@ -225,9 +212,7 @@ function SituationPage() {
         )}
 
         <SectionCard eyebrow="Section 01" title="What LIFELINE understands">
-          <p className="text-sm leading-relaxed text-muted-foreground">
-            {analysis.problemSummary}
-          </p>
+          <p className="text-sm leading-relaxed text-muted-foreground">{analysis.problemSummary}</p>
           <p className="mt-4 text-[15px] leading-relaxed text-foreground/90">
             {analysis.explanation}
           </p>

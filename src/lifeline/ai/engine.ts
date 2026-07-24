@@ -18,44 +18,41 @@ export class LifelineEngine {
     return this.provider.name;
   }
 
-  async analyze(
-  input: string,
-  signal?: AbortSignal
-): Promise<LifelineAnalysis> {
-  const trimmed = input.trim();
+  async analyze(input: string, signal?: AbortSignal): Promise<LifelineAnalysis> {
+    const trimmed = input.trim();
 
-  if (!trimmed) {
-    throw new Error("Please describe a problem first.");
+    if (!trimmed) {
+      throw new Error("Please describe a problem first.");
+    }
+
+    return this.provider.analyzeProblem(
+      {
+        input: trimmed,
+      },
+      signal,
+    );
   }
 
-  return this.provider.analyzeProblem(
-    {
-      input: trimmed,
-    },
-    signal
-  );
-}
+  async continueSituation(
+    situation: LifelineSituation,
+    observation: string,
+    signal?: AbortSignal,
+  ): Promise<LifelineAnalysis> {
+    const trimmed = observation.trim();
 
-async continueSituation(
-  situation: LifelineSituation,
-  observation: string,
-  signal?: AbortSignal
-): Promise<LifelineAnalysis> {
-  const trimmed = observation.trim();
+    if (!trimmed) {
+      throw new Error("Please describe what you observed.");
+    }
 
-  if (!trimmed) {
-    throw new Error("Please describe what you observed.");
+    return this.provider.analyzeProblem(
+      {
+        input: situation.input,
+        situation,
+        newObservation: trimmed,
+      },
+      signal,
+    );
   }
-
-  return this.provider.analyzeProblem(
-    {
-      input: situation.input,
-      situation,
-      newObservation: trimmed,
-    },
-    signal
-  );
-}
 }
 
 export const lifelineEngine = new LifelineEngine();

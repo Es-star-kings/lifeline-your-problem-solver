@@ -36,9 +36,7 @@ function write(list: LifelineSituation[]) {
 }
 
 function uid() {
-  return (
-    Date.now().toString(36) + Math.random().toString(36).slice(2, 8)
-  );
+  return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
 }
 
 function deriveTitle(input: string) {

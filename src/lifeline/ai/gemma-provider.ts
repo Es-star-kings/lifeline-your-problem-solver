@@ -4,11 +4,7 @@ import type {
   LifelineDomain,
   LifelineUrgency,
 } from "../types";
-import {
-  AIProviderError,
-  type LifelineAIContext,
-  type LifelineAIProvider,
-} from "./provider";
+import { AIProviderError, type LifelineAIContext, type LifelineAIProvider } from "./provider";
 
 const DOMAINS: LifelineDomain[] = [
   "education",
@@ -56,17 +52,12 @@ function endpoint(): string | undefined {
 }
 
 function model(): string {
-  return (
-    (import.meta.env.VITE_GEMMA_MODEL as string | undefined)?.trim() ||
-    "gemma-3-4b-it"
-  );
+  return (import.meta.env.VITE_GEMMA_MODEL as string | undefined)?.trim() || "gemma-3-4b-it";
 }
 
 function buildUserMessage(ctx: LifelineAIContext): string {
   if (ctx.situation && ctx.newObservation) {
-    const priorObs = ctx.situation.observations
-      .map((o, i) => `${i + 1}. ${o.content}`)
-      .join("\n");
+    const priorObs = ctx.situation.observations.map((o, i) => `${i + 1}. ${o.content}`).join("\n");
     return [
       `Original situation: ${ctx.situation.input}`,
       `Previous understanding: ${ctx.situation.analysis.problemSummary}`,
@@ -82,7 +73,10 @@ function buildUserMessage(ctx: LifelineAIContext): string {
 }
 
 function extractJson(text: string): unknown {
-  const trimmed = text.trim().replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/i, "");
+  const trimmed = text
+    .trim()
+    .replace(/^```(?:json)?\s*/i, "")
+    .replace(/```\s*$/i, "");
   try {
     return JSON.parse(trimmed);
   } catch {
@@ -104,15 +98,11 @@ function pickString(v: unknown, fallback = ""): string {
 }
 
 function coerceDomain(v: unknown): LifelineDomain {
-  return DOMAINS.includes(v as LifelineDomain)
-    ? (v as LifelineDomain)
-    : "productivity";
+  return DOMAINS.includes(v as LifelineDomain) ? (v as LifelineDomain) : "productivity";
 }
 
 function coerceUrgency(v: unknown): LifelineUrgency {
-  return URGENCIES.includes(v as LifelineUrgency)
-    ? (v as LifelineUrgency)
-    : "medium";
+  return URGENCIES.includes(v as LifelineUrgency) ? (v as LifelineUrgency) : "medium";
 }
 
 function coerceActionPlan(v: unknown): LifelineActionStep[] {
@@ -149,9 +139,7 @@ function validate(raw: unknown): LifelineAnalysis {
     throw new AIProviderError("Gemma response missing summary/explanation");
   }
   const followUps = Array.isArray(r.followUpQuestions)
-    ? r.followUpQuestions
-        .map((q) => pickString(q).trim())
-        .filter((q) => q.length > 0)
+    ? r.followUpQuestions.map((q) => pickString(q).trim()).filter((q) => q.length > 0)
     : [];
   const safety = pickString(r.safetyNote).trim();
   return {
@@ -222,8 +210,7 @@ export const gemmaProvider: LifelineAIProvider = {
       content?: string;
       text?: string;
     };
-    const text =
-      p.choices?.[0]?.message?.content ?? p.content ?? p.text ?? "";
+    const text = p.choices?.[0]?.message?.content ?? p.content ?? p.text ?? "";
     if (!text) {
       throw new AIProviderError("Gemma returned empty content");
     }

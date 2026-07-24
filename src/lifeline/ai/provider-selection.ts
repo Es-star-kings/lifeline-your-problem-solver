@@ -1,11 +1,7 @@
 import type { LifelineAnalysis } from "../types";
 import { gemmaProvider } from "./gemma-provider";
 import { offlineProvider } from "./offline-provider";
-import {
-  AIProviderError,
-  type LifelineAIContext,
-  type LifelineAIProvider,
-} from "./provider";
+import { AIProviderError, type LifelineAIContext, type LifelineAIProvider } from "./provider";
 
 /**
  * Automatic provider selection with graceful fallback.
@@ -29,10 +25,7 @@ const adaptiveProvider: LifelineAIProvider = {
     return true;
   },
 
-  async analyzeProblem(
-    ctx: LifelineAIContext,
-    signal?: AbortSignal,
-  ): Promise<LifelineAnalysis> {
+  async analyzeProblem(ctx: LifelineAIContext, signal?: AbortSignal): Promise<LifelineAnalysis> {
     const chain = providerChain();
     let lastError: unknown;
     for (const provider of chain) {
@@ -48,10 +41,7 @@ const adaptiveProvider: LifelineAIProvider = {
         continue;
       }
     }
-    throw new AIProviderError(
-      "No LIFELINE provider could handle this request.",
-      lastError,
-    );
+    throw new AIProviderError("No LIFELINE provider could handle this request.", lastError);
   },
 };
 

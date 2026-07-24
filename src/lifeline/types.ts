@@ -1,9 +1,5 @@
 export type LifelineDomain =
-  | "education"
-  | "healthcare"
-  | "agriculture"
-  | "productivity"
-  | "community";
+  "education" | "healthcare" | "agriculture" | "productivity" | "community";
 
 export type LifelineUrgency = "low" | "medium" | "high";
 

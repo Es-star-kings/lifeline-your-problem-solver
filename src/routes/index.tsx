@@ -102,8 +102,8 @@ function Index() {
             What problem are you facing today?
           </h1>
           <p className="mt-5 max-w-2xl text-pretty text-[15px] leading-relaxed text-muted-foreground sm:text-base">
-            Describe a problem in your own words. LIFELINE helps you understand what is
-            happening and find practical next steps.
+            Describe a problem in your own words. LIFELINE helps you understand what is happening
+            and find practical next steps.
           </p>
         </div>
 
@@ -164,9 +164,7 @@ function Index() {
                   <span className="h-1 w-1 rounded-full bg-primary/70" />
                   {ex.label}
                 </div>
-                <div className="mt-2 text-sm leading-relaxed text-foreground/90">
-                  “{ex.prompt}”
-                </div>
+                <div className="mt-2 text-sm leading-relaxed text-foreground/90">“{ex.prompt}”</div>
                 <div className="mt-3 flex items-center gap-1 text-[11px] text-muted-foreground/80 opacity-0 transition group-hover:opacity-100">
                   Try it <ArrowRight small />
                 </div>
@@ -205,7 +203,10 @@ function Index() {
                         <span className="h-1 w-1 rounded-full bg-border" />
                         <span>{s.status}</span>
                         <span className="h-1 w-1 rounded-full bg-border" />
-                        <span>{s.observations.length} observation{s.observations.length === 1 ? "" : "s"}</span>
+                        <span>
+                          {s.observations.length} observation
+                          {s.observations.length === 1 ? "" : "s"}
+                        </span>
                       </div>
                       <div className="mt-1 truncate text-sm text-foreground/90">{s.title}</div>
                     </div>
@@ -392,7 +393,13 @@ function ProgressGlyph({ state }: { state: "done" | "active" | "pending" }) {
     return (
       <span className="grid h-5 w-5 place-items-center rounded-full border border-primary/60 bg-primary/15 text-primary">
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden>
-          <path d="M5 12l4 4L19 7" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+          <path
+            d="M5 12l4 4L19 7"
+            stroke="currentColor"
+            strokeWidth="2.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
         </svg>
       </span>
     );
@@ -404,9 +411,7 @@ function ProgressGlyph({ state }: { state: "done" | "active" | "pending" }) {
       </span>
     );
   }
-  return (
-    <span className="h-5 w-5 rounded-full border border-border" />
-  );
+  return <span className="h-5 w-5 rounded-full border border-border" />;
 }
 
 function AnalysisView({ analysis }: { analysis: LifelineAnalysis }) {

@@ -21,10 +21,7 @@ export interface LifelineAIProvider {
   /** Whether this provider can currently service a request. */
   isAvailable?(): boolean | Promise<boolean>;
 
-  analyzeProblem(
-    context: LifelineAIContext,
-    signal?: AbortSignal,
-  ): Promise<LifelineAnalysis>;
+  analyzeProblem(context: LifelineAIContext, signal?: AbortSignal): Promise<LifelineAnalysis>;
 }
 
 export class AIProviderError extends Error {

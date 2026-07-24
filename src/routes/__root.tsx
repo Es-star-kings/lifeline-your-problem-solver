@@ -78,17 +78,37 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
       { title: "LIFELINE — Local intelligence for real life" },
-      { name: "description", content: "Describe any real-world situation. LIFELINE helps you understand it and find practical next steps, powered by Gemma." },
+      {
+        name: "description",
+        content:
+          "Describe any real-world situation. LIFELINE helps you understand it and find practical next steps, powered by Gemma.",
+      },
       { name: "author", content: "Lovable" },
       { property: "og:title", content: "LIFELINE — Local intelligence for real life" },
-      { property: "og:description", content: "Describe any real-world situation. LIFELINE helps you understand it and find practical next steps, powered by Gemma." },
+      {
+        property: "og:description",
+        content:
+          "Describe any real-world situation. LIFELINE helps you understand it and find practical next steps, powered by Gemma.",
+      },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
       { name: "twitter:site", content: "@Lovable" },
       { name: "twitter:title", content: "LIFELINE — Local intelligence for real life" },
-      { name: "twitter:description", content: "Describe any real-world situation. LIFELINE helps you understand it and find practical next steps, powered by Gemma." },
-      { property: "og:image", content: "https://storage.googleapis.com/gpt-engineer-file-uploads/attachments/og-images/639541ec-416b-40f2-a4db-14d50a5d3522" },
-      { name: "twitter:image", content: "https://storage.googleapis.com/gpt-engineer-file-uploads/attachments/og-images/639541ec-416b-40f2-a4db-14d50a5d3522" },
+      {
+        name: "twitter:description",
+        content:
+          "Describe any real-world situation. LIFELINE helps you understand it and find practical next steps, powered by Gemma.",
+      },
+      {
+        property: "og:image",
+        content:
+          "https://storage.googleapis.com/gpt-engineer-file-uploads/attachments/og-images/639541ec-416b-40f2-a4db-14d50a5d3522",
+      },
+      {
+        name: "twitter:image",
+        content:
+          "https://storage.googleapis.com/gpt-engineer-file-uploads/attachments/og-images/639541ec-416b-40f2-a4db-14d50a5d3522",
+      },
     ],
     links: [
       {
