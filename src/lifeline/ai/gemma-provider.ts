@@ -4,7 +4,16 @@ import type {
   LifelineDomain,
   LifelineUrgency,
 } from "../types";
-import { AIProviderError, type LifelineAIContext, type LifelineAIProvider } from "./provider";
+import {
+  AIProviderError,
+  type LifelineAIContext,
+  type LifelineAIProvider,
+} from "./provider";
+import {
+  AIServiceError,
+  generateAIResponse,
+  isAIConfigured,
+} from "@/lib/ai/ai-client";
 
 const DOMAINS: LifelineDomain[] = [
   "education",
@@ -164,33 +173,25 @@ export const gemmaProvider: LifelineAIProvider = {
   name: "Gemma",
 
   isAvailable() {
-    return endpoint() !== undefined;
+    return isAIConfigured();
   },
 
   async analyzeProblem(ctx, signal): Promise<LifelineAnalysis> {
-    const url = endpoint();
-    if (!url) {
+    if (!isAIConfigured()) {
       throw new AIProviderError("Gemma endpoint is not configured");
     }
 
-    let res: Response;
+    let text: string;
     try {
-      res = await fetch(url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
+      text = await generateAIResponse(buildUserMessage(ctx), {
+        systemPrompt: SYSTEM_PROMPT,
+        temperature: 0.3,
+        maxTokens: 1024,
         signal,
-        body: JSON.stringify({
-          model: model(),
-          temperature: 0.3,
-          response_format: { type: "json_object" },
-          messages: [
-            { role: "system", content: SYSTEM_PROMPT },
-            { role: "user", content: buildUserMessage(ctx) },
-          ],
-        }),
       });
     } catch (err) {
       if ((err as { name?: string })?.name === "AbortError") throw err;
+<<<<<<< HEAD
       throw new AIProviderError("Could not reach Gemma", err);
     }
 
@@ -213,6 +214,12 @@ export const gemmaProvider: LifelineAIProvider = {
     const text = p.choices?.[0]?.message?.content ?? p.content ?? p.text ?? "";
     if (!text) {
       throw new AIProviderError("Gemma returned empty content");
+=======
+      if (err instanceof AIServiceError) {
+        throw new AIProviderError(err.message, err);
+      }
+      throw new AIProviderError("Could not reach AI service", err);
+>>>>>>> 247a0eca7d223abd65bfe50ff348dbabaa4c7f71
     }
 
     return validate(extractJson(text));
