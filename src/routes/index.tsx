@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { lifelineEngine } from "@/lifeline/ai/engine";
-import { AI_UNAVAILABLE_MESSAGE } from "@/lib/ai/ai-client";
+import { AI_UNAVAILABLE_MESSAGE, getGemmaRuntimeInfo } from "@/lib/ai/ai-client";
 import { examples } from "@/lifeline/examples";
 import { situationsStore } from "@/lifeline/storage/situations";
 import type { LifelineAnalysis, LifelineSituation } from "@/lifeline/types";
@@ -44,10 +44,27 @@ function Index() {
     return () => clearTimeout(t);
   }, []);
 
+  useEffect(() => {
+    let cancelled = false;
+
+    async function checkStatus() {
+      const info = await getGemmaRuntimeInfo();
+      if (!cancelled) {
+        setAiStatus(info.message);
+      }
+    }
+
+    void checkStatus();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [phase, setPhase] = useState<AnalysisPhase>(0);
   const [error, setError] = useState<string | null>(null);
+  const [aiStatus, setAiStatus] = useState("Offline AI Mode");
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const navigate = useNavigate();
 
@@ -103,6 +120,18 @@ function Index() {
           <h1 className="mt-5 text-balance text-4xl font-semibold leading-[1.05] tracking-tight text-foreground sm:text-5xl">
             What problem are you facing today?
           </h1>
+          <div className="mt-4 inline-flex items-center gap-2 rounded-full border border-border/70 bg-card/60 px-3 py-1 text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground backdrop-blur">
+            <span
+              className={`h-2 w-2 rounded-full ${
+                aiStatus === "Gemma AI Online"
+                  ? "bg-emerald-500"
+                  : aiStatus === "Gemma AI Unavailable"
+                    ? "bg-amber-500"
+                    : "bg-slate-400"
+              }`}
+            />
+            {aiStatus}
+          </div>
           <p className="mt-5 max-w-2xl text-pretty text-[15px] leading-relaxed text-muted-foreground sm:text-base">
             Describe a problem in your own words. LIFELINE helps you understand what is happening
             and find practical next steps.

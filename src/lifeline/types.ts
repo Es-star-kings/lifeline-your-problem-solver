@@ -1,51 +1,73 @@
-export type LifelineDomain =
-  | "education"
-  | "healthcare"
-  | "agriculture"
-  | "productivity"
-  | "community"
-  | "general";
+export type ProblemCategory =
+  "education" | "healthcare" | "agriculture" | "productivity" | "community" | "general";
 
-export type LifelineCategory = LifelineDomain;
-export type LifelineUrgency = "low" | "medium" | "high";
-export type LifelineStepStatus = "pending" | "in_progress" | "completed";
+export type LifelineDomain = ProblemCategory;
+export type LifelineCategory = ProblemCategory;
 
-export interface LifelineActionStep {
+export type ProblemUrgency = "low" | "medium" | "high";
+export type LifelineUrgency = ProblemUrgency;
+
+export type ProblemStepStatus = "pending" | "in_progress" | "completed";
+export type LifelineStepStatus = ProblemStepStatus;
+
+export type SuggestedToolType =
+  | "notes"
+  | "quiz"
+  | "scenarios"
+  | "explanation"
+  | "study_plan"
+  | "checklist"
+  | "project_plan"
+  | "resource_finder";
+export type ProblemResourceKind = "resource" | "service" | "location";
+
+export interface ActionPlanStep {
   id: string;
   step: number;
   title: string;
   description: string;
   timeframe?: string;
-  status: LifelineStepStatus;
+  status: ProblemStepStatus;
 }
 
-export interface LifelineSuggestedTool {
+export type LifelineActionStep = ActionPlanStep;
+
+export interface SuggestedTool {
   id: string;
-  type: string;
+  type: SuggestedToolType;
   title: string;
   description: string;
 }
 
-export interface LifelineResource {
+export type LifelineSuggestedTool = SuggestedTool;
+
+export interface ProblemResource {
   id: string;
   title: string;
   description: string;
-  kind: "resource" | "service" | "location";
+  kind: ProblemResourceKind;
   locationHint?: string;
 }
 
-export interface LifelineAnalysis {
-  category: LifelineCategory;
-  domain: LifelineDomain;
+export type LifelineResource = ProblemResource;
+
+export interface StructuredProblemAnalysis {
+  category: ProblemCategory;
   problemSummary: string;
   userIntent: string;
-  urgency: LifelineUrgency;
-  explanation: string;
-  actionPlan: LifelineActionStep[];
-  suggestedTools: LifelineSuggestedTool[];
+  urgency: ProblemUrgency;
+  actionPlan: ActionPlanStep[];
+  suggestedTools: SuggestedTool[];
   followUpQuestions: string[];
-  resources: LifelineResource[];
+  resources: ProblemResource[];
+  domain?: ProblemCategory;
+  explanation?: string;
   safetyNote?: string;
+}
+
+export interface LifelineAnalysis extends StructuredProblemAnalysis {
+  domain: LifelineDomain;
+  explanation: string;
 }
 
 export interface LifelineCase {

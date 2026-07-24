@@ -48,6 +48,14 @@ function SituationPage() {
 
   const [observation, setObservation] = useState("");
   const [isReanalyzing, setIsReanalyzing] = useState(false);
+  const [analysisError, setAnalysisError] = useState<string | null>(null);
+  const [stepState, setStepState] = useState<Record<string, boolean>>(() => {
+    const initial: Record<string, boolean> = {};
+    (situation?.analysis.actionPlan ?? []).forEach((step) => {
+      initial[step.id] = step.status === "completed";
+    });
+    return initial;
+  });
 
   if (!situation) {
     return (
@@ -74,19 +82,13 @@ function SituationPage() {
 
   const { analysis } = situation;
   const situationId = situation.id;
-  const [stepState, setStepState] = useState<Record<string, boolean>>(() => {
-    const initial: Record<string, boolean> = {};
-    analysis.actionPlan.forEach((step) => {
-      initial[step.id] = step.status === "completed";
-    });
-    return initial;
-  });
 
   async function addObservation() {
     const content = observation.trim();
 
     if (!content || isReanalyzing) return;
 
+    setAnalysisError(null);
     setIsReanalyzing(true);
 
     try {
@@ -103,6 +105,11 @@ function SituationPage() {
       setObservation("");
     } catch (error) {
       console.error(error);
+      setAnalysisError(
+        error instanceof Error
+          ? error.message
+          : "LIFELINE could not update this situation right now.",
+      );
     } finally {
       setIsReanalyzing(false);
     }
@@ -125,13 +132,17 @@ function SituationPage() {
         : "text-muted-foreground";
 
   const completedSteps = analysis.actionPlan.filter((step) => stepState[step.id]).length;
-  const progressPercent = Math.round((completedSteps / Math.max(analysis.actionPlan.length, 1)) * 100);
+  const progressPercent = Math.round(
+    (completedSteps / Math.max(analysis.actionPlan.length, 1)) * 100,
+  );
 
   function toggleStep(step: LifelineActionStep) {
     const nextValue = !stepState[step.id];
     setStepState((current) => ({ ...current, [step.id]: nextValue }));
-    const enhanced = analysis.actionPlan.map((item) =>
-      item.id === step.id ? { ...item, status: nextValue ? "completed" : "pending" } : item,
+    const enhanced: LifelineActionStep[] = analysis.actionPlan.map((item) =>
+      item.id === step.id
+        ? { ...item, status: (nextValue ? "completed" : "pending") as LifelineActionStep["status"] }
+        : item,
     );
     situationsStore.updateAnalysis(situationId, { ...analysis, actionPlan: enhanced });
   }
@@ -235,12 +246,18 @@ function SituationPage() {
             <span className="rounded-full border border-border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-primary">
               {analysis.category}
             </span>
-            <span className={`rounded-full border border-border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] ${urgencyColor}`}>
+            <span
+              className={`rounded-full border border-border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] ${urgencyColor}`}
+            >
               {analysis.urgency} urgency
             </span>
           </div>
-          <p className="mt-4 text-sm leading-relaxed text-muted-foreground">{analysis.problemSummary}</p>
-          <p className="mt-3 text-[15px] leading-relaxed text-foreground/90">{analysis.explanation}</p>
+          <p className="mt-4 text-sm leading-relaxed text-muted-foreground">
+            {analysis.problemSummary}
+          </p>
+          <p className="mt-3 text-[15px] leading-relaxed text-foreground/90">
+            {analysis.explanation}
+          </p>
           <div className="mt-4 rounded-xl border border-border/70 bg-background/40 p-4 text-sm">
             <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
               User intent
@@ -275,14 +292,19 @@ function SituationPage() {
             </div>
             <ol className="space-y-3">
               {analysis.actionPlan.map((step) => (
-                <li key={step.id} className="rounded-xl border border-border/70 bg-background/40 p-4">
+                <li
+                  key={step.id}
+                  className="rounded-xl border border-border/70 bg-background/40 p-4"
+                >
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
                       <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
                         Step {step.step}
                       </div>
                       <div className="mt-1 text-sm font-semibold text-foreground">{step.title}</div>
-                      <div className="mt-1 text-sm leading-relaxed text-muted-foreground">{step.description}</div>
+                      <div className="mt-1 text-sm leading-relaxed text-muted-foreground">
+                        {step.description}
+                      </div>
                       {step.timeframe && (
                         <div className="mt-2 text-[11px] uppercase tracking-[0.16em] text-primary">
                           {step.timeframe}
@@ -311,12 +333,17 @@ function SituationPage() {
           <SectionCard eyebrow="Section 03" title="Learn & explore">
             <div className="grid gap-3 md:grid-cols-2">
               {analysis.suggestedTools.map((tool) => (
-                <div key={tool.id} className="rounded-xl border border-border/70 bg-background/40 p-4">
+                <div
+                  key={tool.id}
+                  className="rounded-xl border border-border/70 bg-background/40 p-4"
+                >
                   <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-primary">
                     {tool.type}
                   </div>
                   <div className="mt-2 text-sm font-semibold text-foreground">{tool.title}</div>
-                  <p className="mt-1 text-sm leading-relaxed text-muted-foreground">{tool.description}</p>
+                  <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
+                    {tool.description}
+                  </p>
                 </div>
               ))}
             </div>
@@ -327,7 +354,10 @@ function SituationPage() {
           {analysis.resources.length > 0 ? (
             <div className="space-y-3">
               {analysis.resources.map((resource) => (
-                <div key={resource.id} className="rounded-xl border border-border/70 bg-background/40 p-4">
+                <div
+                  key={resource.id}
+                  className="rounded-xl border border-border/70 bg-background/40 p-4"
+                >
                   <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
                     {resource.kind}
                   </div>
@@ -409,6 +439,11 @@ function SituationPage() {
               </button>
             </div>
           </div>
+          {analysisError && (
+            <div className="mt-3 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive-foreground">
+              {analysisError}
+            </div>
+          )}
           <p className="mt-3 text-[11px] leading-relaxed text-muted-foreground/80">
             Observations are saved to this situation and will feed the next LIFELINE re-analysis
             when Gemma is connected.

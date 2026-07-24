@@ -31,8 +31,15 @@ export class AIServiceError extends Error {
   }
 }
 
-export const AI_UNAVAILABLE_MESSAGE =
-  "AI service is temporarily unavailable. Please try again.";
+export type GemmaRuntimeStatus = "online" | "unavailable" | "offline";
+
+export interface GemmaRuntimeInfo {
+  configured: boolean;
+  status: GemmaRuntimeStatus;
+  message: string;
+}
+
+export const AI_UNAVAILABLE_MESSAGE = "AI service is temporarily unavailable. Please try again.";
 
 function getBaseUrl(): string {
   const raw = (import.meta.env.VITE_GEMMA_API_URL as string | undefined)?.trim();
@@ -45,6 +52,52 @@ function getBaseUrl(): string {
 export function isAIConfigured(): boolean {
   const raw = (import.meta.env.VITE_GEMMA_API_URL as string | undefined)?.trim();
   return !!raw && raw.length > 0;
+}
+
+export async function getGemmaRuntimeInfo(signal?: AbortSignal): Promise<GemmaRuntimeInfo> {
+  if (!isAIConfigured()) {
+    return {
+      configured: false,
+      status: "offline",
+      message: "Offline AI Mode",
+    };
+  }
+
+  if (!import.meta.env.DEV || typeof window === "undefined") {
+    return {
+      configured: true,
+      status: "online",
+      message: "Gemma AI Online",
+    };
+  }
+
+  try {
+    const response = await fetch(`${getBaseUrl()}/health`, {
+      method: "GET",
+      headers: { Accept: "application/json" },
+      signal,
+    });
+
+    if (response.ok) {
+      return {
+        configured: true,
+        status: "online",
+        message: "Gemma AI Online",
+      };
+    }
+
+    return {
+      configured: true,
+      status: "unavailable",
+      message: "Gemma AI Unavailable",
+    };
+  } catch {
+    return {
+      configured: true,
+      status: "unavailable",
+      message: "Gemma AI Unavailable",
+    };
+  }
 }
 
 function mergeSignals(
@@ -73,11 +126,7 @@ function mergeSignals(
   };
 }
 
-async function callOnce(
-  url: string,
-  body: string,
-  signal: AbortSignal,
-): Promise<string> {
+async function callOnce(url: string, body: string, signal: AbortSignal): Promise<string> {
   let res: Response;
   try {
     res = await fetch(url, {
@@ -98,11 +147,7 @@ async function callOnce(
   if (!res.ok) {
     // 5xx and 429 are retriable; 4xx generally are not.
     const retriable = res.status >= 500 || res.status === 429;
-    throw new AIServiceError(
-      `AI service returned ${res.status}`,
-      undefined,
-      retriable,
-    );
+    throw new AIServiceError(`AI service returned ${res.status}`, undefined, retriable);
   }
 
   let payload: unknown;

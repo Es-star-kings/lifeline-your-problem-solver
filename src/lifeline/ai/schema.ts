@@ -1,14 +1,18 @@
 import { z } from "zod";
 import type {
-  LifelineActionStep,
+  ActionPlanStep,
   LifelineAnalysis,
   LifelineCategory,
   LifelineResource,
   LifelineSuggestedTool,
   LifelineUrgency,
+  ProblemCategory,
+  ProblemResource,
+  ProblemUrgency,
+  SuggestedTool,
 } from "../types";
 
-const lifelineDomains = [
+const problemCategories = [
   "education",
   "healthcare",
   "agriculture",
@@ -17,53 +21,84 @@ const lifelineDomains = [
   "general",
 ] as const;
 
-export const lifelineDomainSchema = z.enum(lifelineDomains);
-export const lifelineUrgencySchema = z.enum(["low", "medium", "high"]);
-export const lifelineStepStatusSchema = z.enum(["pending", "in_progress", "completed"]);
+const suggestedToolTypes = [
+  "notes",
+  "quiz",
+  "scenarios",
+  "explanation",
+  "study_plan",
+  "checklist",
+  "project_plan",
+  "resource_finder",
+] as const;
+const resourceKinds = ["resource", "service", "location"] as const;
+const stepStatuses = ["pending", "in_progress", "completed"] as const;
 
-export const lifelineActionStepSchema = z.object({
+export const problemCategorySchema = z.enum(problemCategories);
+export const problemUrgencySchema = z.enum(["low", "medium", "high"]);
+export const problemStepStatusSchema = z.enum(stepStatuses);
+export const suggestedToolTypeSchema = z.enum(suggestedToolTypes);
+export const problemResourceKindSchema = z.enum(resourceKinds);
+
+export const lifelineDomainSchema = problemCategorySchema;
+export const lifelineUrgencySchema = problemUrgencySchema;
+export const lifelineStepStatusSchema = problemStepStatusSchema;
+
+export const actionPlanStepSchema = z.object({
   step: z.number().int().positive().optional(),
-  id: z.string().min(1).optional(),
-  title: z.string().min(1).max(120),
-  description: z.string().min(1).max(400),
-  timeframe: z.string().max(80).optional(),
-  status: lifelineStepStatusSchema.optional().default("pending"),
+  id: z.string().trim().min(1).max(80).optional(),
+  title: z.string().trim().min(1).max(120),
+  description: z.string().trim().min(1).max(400),
+  timeframe: z.string().trim().max(80).optional(),
+  status: problemStepStatusSchema.optional().default("pending"),
 });
 
-export const lifelineSuggestedToolSchema = z.object({
-  id: z.string().min(1).optional(),
-  type: z.string().min(1).max(80),
-  title: z.string().min(1).max(120),
-  description: z.string().min(1).max(220),
+export const suggestedToolSchema = z.object({
+  id: z.string().trim().min(1).max(80).optional(),
+  type: suggestedToolTypeSchema.default("explanation"),
+  title: z.string().trim().min(1).max(120),
+  description: z.string().trim().min(1).max(220),
 });
 
-export const lifelineResourceSchema = z.object({
-  id: z.string().min(1).optional(),
-  title: z.string().min(1).max(120),
-  description: z.string().min(1).max(240),
-  kind: z.enum(["resource", "service", "location"]).optional().default("resource"),
-  locationHint: z.string().max(140).optional(),
+export const problemResourceSchema = z.object({
+  id: z.string().trim().min(1).max(80).optional(),
+  title: z.string().trim().min(1).max(120),
+  description: z.string().trim().min(1).max(240),
+  kind: problemResourceKindSchema.optional().default("resource"),
+  locationHint: z.string().trim().max(140).optional(),
 });
 
-export const lifelineAnalysisSchema = z.object({
-  category: lifelineDomainSchema.optional(),
-  domain: lifelineDomainSchema.optional(),
-  problemSummary: z.string().min(1).max(400),
-  userIntent: z.string().min(1).max(260).optional(),
-  urgency: lifelineUrgencySchema.optional().default("medium"),
-  explanation: z.string().min(1).max(800).optional(),
-  actionPlan: z.array(lifelineActionStepSchema).min(1).max(8).optional().default([]),
-  suggestedTools: z.array(lifelineSuggestedToolSchema).optional().default([]),
-  followUpQuestions: z.array(z.string().min(1).max(220)).optional().default([]),
-  resources: z.array(lifelineResourceSchema).optional().default([]),
-  safetyNote: z.string().max(400).optional(),
+export const structuredProblemAnalysisSchema = z.object({
+  category: problemCategorySchema.default("general"),
+  problemSummary: z.string().trim().min(1).max(400),
+  userIntent: z
+    .string()
+    .trim()
+    .min(1)
+    .max(260)
+    .default("Understand the problem and find the next useful step."),
+  urgency: problemUrgencySchema.default("medium"),
+  actionPlan: z.array(actionPlanStepSchema).min(1).max(8).default([]),
+  suggestedTools: z.array(suggestedToolSchema).default([]),
+  followUpQuestions: z.array(z.string().trim().min(1).max(220)).default([]),
+  resources: z.array(problemResourceSchema).default([]),
+  domain: problemCategorySchema.optional(),
+  explanation: z.string().trim().max(800).optional(),
+  safetyNote: z.string().trim().max(400).optional(),
 });
+
+export const lifelineAnalysisSchema = structuredProblemAnalysisSchema;
+
+export type StructuredProblemAnalysisSchema = z.infer<typeof structuredProblemAnalysisSchema>;
+export type ActionPlanStepSchema = z.infer<typeof actionPlanStepSchema>;
+export type SuggestedToolSchema = z.infer<typeof suggestedToolSchema>;
+export type ProblemResourceSchema = z.infer<typeof problemResourceSchema>;
 
 function createId(prefix: string): string {
   return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
-function normalizeStep(step: z.infer<typeof lifelineActionStepSchema>, index: number): LifelineActionStep {
+function normalizeStep(step: ActionPlanStepSchema, index: number): ActionPlanStep {
   return {
     step: step.step ?? index + 1,
     id: step.id ?? createId("step"),
@@ -74,7 +109,7 @@ function normalizeStep(step: z.infer<typeof lifelineActionStepSchema>, index: nu
   };
 }
 
-function normalizeTool(tool: z.infer<typeof lifelineSuggestedToolSchema>, index: number): LifelineSuggestedTool {
+function normalizeTool(tool: SuggestedToolSchema): SuggestedTool {
   return {
     id: tool.id ?? createId("tool"),
     type: tool.type,
@@ -83,7 +118,7 @@ function normalizeTool(tool: z.infer<typeof lifelineSuggestedToolSchema>, index:
   };
 }
 
-function normalizeResource(resource: z.infer<typeof lifelineResourceSchema>, index: number): LifelineResource {
+function normalizeResource(resource: ProblemResourceSchema): ProblemResource {
   return {
     id: resource.id ?? createId("resource"),
     title: resource.title,
@@ -94,24 +129,25 @@ function normalizeResource(resource: z.infer<typeof lifelineResourceSchema>, ind
 }
 
 export function normalizeAnalysis(raw: unknown): LifelineAnalysis {
-  const parsed = lifelineAnalysisSchema.safeParse(raw);
+  const parsed = structuredProblemAnalysisSchema.safeParse(raw);
   if (!parsed.success) {
     throw new Error("Invalid AI analysis schema");
   }
 
   const value = parsed.data;
-  const domain = (value.category ?? value.domain ?? "general") as LifelineCategory;
+  const category = (value.category ?? value.domain ?? "general") as ProblemCategory;
+  const domain = (value.domain ?? category) as LifelineCategory;
   return {
-    category: domain,
+    category,
     domain,
     problemSummary: value.problemSummary,
-    userIntent: value.userIntent ?? "Understand the problem and find the next useful step.",
+    userIntent: value.userIntent,
     urgency: value.urgency as LifelineUrgency,
     explanation: value.explanation ?? value.problemSummary,
     actionPlan: value.actionPlan.map((step, index) => normalizeStep(step, index)),
-    suggestedTools: value.suggestedTools.map((tool, index) => normalizeTool(tool, index)),
+    suggestedTools: value.suggestedTools.map((tool) => normalizeTool(tool)),
     followUpQuestions: value.followUpQuestions,
-    resources: value.resources.map((resource, index) => normalizeResource(resource, index)),
+    resources: value.resources.map((resource) => normalizeResource(resource)),
     safetyNote: value.safetyNote,
   };
 }

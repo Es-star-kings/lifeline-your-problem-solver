@@ -5,6 +5,7 @@ import type {
   LifelineResource,
   LifelineSuggestedTool,
   LifelineUrgency,
+  SuggestedToolType,
 } from "../types";
 import type { LifelineAIContext, LifelineAIProvider } from "./provider";
 import { normalizeAnalysis } from "./schema";
@@ -41,7 +42,12 @@ function firstSentence(s: string, max = 140): string {
   return cut.length < clean.length ? cut.replace(/[.!?]?$/, "…") : cut;
 }
 
-function buildActionStep(step: number, title: string, description: string, timeframe?: string): LifelineActionStep {
+function buildActionStep(
+  step: number,
+  title: string,
+  description: string,
+  timeframe?: string,
+): LifelineActionStep {
   return {
     id: `step-${step}`,
     step,
@@ -53,15 +59,32 @@ function buildActionStep(step: number, title: string, description: string, timef
 }
 
 function buildTool(type: string, title: string, description: string): LifelineSuggestedTool {
+  const normalizedType: SuggestedToolType =
+    type === "notes" ||
+    type === "quiz" ||
+    type === "scenarios" ||
+    type === "explanation" ||
+    type === "study_plan" ||
+    type === "checklist" ||
+    type === "project_plan" ||
+    type === "resource_finder"
+      ? (type as SuggestedToolType)
+      : "explanation";
+
   return {
-    id: `${type}-${title}`.toLowerCase().replace(/[^a-z0-9]+/g, "-"),
-    type,
+    id: `${normalizedType}-${title}`.toLowerCase().replace(/[^a-z0-9]+/g, "-"),
+    type: normalizedType,
     title,
     description,
   };
 }
 
-function buildResource(title: string, description: string, kind: LifelineResource["kind"] = "resource", locationHint?: string): LifelineResource {
+function buildResource(
+  title: string,
+  description: string,
+  kind: LifelineResource["kind"] = "resource",
+  locationHint?: string,
+): LifelineResource {
   return {
     id: `${kind}-${title}`.toLowerCase().replace(/[^a-z0-9]+/g, "-"),
     title,
@@ -82,9 +105,21 @@ const profiles: DomainProfile[] = [
         "This looks like a health concern. Getting clear on the symptoms and how quickly they are changing will decide whether this needs care today or can be watched.",
       userIntent: "Understand the concern and decide the safest next step.",
       steps: [
-        buildActionStep(1, "Describe the symptoms precisely", "Note what you feel, when it started, and how it's changed since."),
-        buildActionStep(2, "Check for danger signs", "Trouble breathing, chest pain, heavy bleeding, confusion, or a very high fever mean seek care now."),
-        buildActionStep(3, "Talk to someone qualified", "Reach a clinic, pharmacist, or trusted health worker with your notes."),
+        buildActionStep(
+          1,
+          "Describe the symptoms precisely",
+          "Note what you feel, when it started, and how it's changed since.",
+        ),
+        buildActionStep(
+          2,
+          "Check for danger signs",
+          "Trouble breathing, chest pain, heavy bleeding, confusion, or a very high fever mean seek care now.",
+        ),
+        buildActionStep(
+          3,
+          "Talk to someone qualified",
+          "Reach a clinic, pharmacist, or trusted health worker with your notes.",
+        ),
       ],
       followUps: [
         "When did the symptoms start?",
@@ -92,11 +127,23 @@ const profiles: DomainProfile[] = [
         "Any existing conditions or medications involved?",
       ],
       suggestedTools: [
-        buildTool("checklist", "Safety checklist", "Create a short checklist of symptoms, timing, and urgent warning signs."),
-        buildTool("notes", "Symptom notes", "Turn your observations into a clear note for a clinician or caregiver."),
+        buildTool(
+          "checklist",
+          "Safety checklist",
+          "Create a short checklist of symptoms, timing, and urgent warning signs.",
+        ),
+        buildTool(
+          "notes",
+          "Symptom notes",
+          "Turn your observations into a clear note for a clinician or caregiver.",
+        ),
       ],
       resources: [
-        buildResource("Professional care guidance", "Use this workspace to gather symptoms and prepare for a clinician conversation.", "service"),
+        buildResource(
+          "Professional care guidance",
+          "Use this workspace to gather symptoms and prepare for a clinician conversation.",
+          "service",
+        ),
       ],
     }),
   },
@@ -110,9 +157,21 @@ const profiles: DomainProfile[] = [
         "This looks like a farming or land-use situation. The right move usually depends on what stage the crop or animals are in and what's actually visible on the ground.",
       userIntent: "Identify the likely issue and prepare a practical troubleshooting plan.",
       steps: [
-        buildActionStep(1, "Inspect closely", "Walk the affected area and note leaves, roots, soil, or animals showing the issue."),
-        buildActionStep(2, "Rule out the common causes", "Water, pests, disease, or nutrients — check each before treating."),
-        buildActionStep(3, "Ask a local extension worker", "They know what's going around in your area and can confirm the pattern."),
+        buildActionStep(
+          1,
+          "Inspect closely",
+          "Walk the affected area and note leaves, roots, soil, or animals showing the issue.",
+        ),
+        buildActionStep(
+          2,
+          "Rule out the common causes",
+          "Water, pests, disease, or nutrients — check each before treating.",
+        ),
+        buildActionStep(
+          3,
+          "Ask a local extension worker",
+          "They know what's going around in your area and can confirm the pattern.",
+        ),
       ],
       followUps: [
         "How long has this been happening?",
@@ -120,11 +179,23 @@ const profiles: DomainProfile[] = [
         "What's the weather been like recently?",
       ],
       suggestedTools: [
-        buildTool("plan", "Agriculture troubleshooting plan", "Turn the issue into a practical troubleshooting checklist with the most likely causes."),
-        buildTool("notes", "Field notes", "Record symptoms, timing, and visible conditions so you can compare changes."),
+        buildTool(
+          "project_plan",
+          "Agriculture troubleshooting plan",
+          "Turn the issue into a practical troubleshooting checklist with the most likely causes.",
+        ),
+        buildTool(
+          "notes",
+          "Field notes",
+          "Record symptoms, timing, and visible conditions so you can compare changes.",
+        ),
       ],
       resources: [
-        buildResource("Local agricultural support", "Prepare a simple summary to share with extension workers or local support services.", "service"),
+        buildResource(
+          "Local agricultural support",
+          "Prepare a simple summary to share with extension workers or local support services.",
+          "service",
+        ),
       ],
     }),
   },
@@ -138,9 +209,21 @@ const profiles: DomainProfile[] = [
         "This is a learning problem. Progress comes from narrowing down exactly where understanding breaks and practicing that one piece.",
       userIntent: "Understand the gap and build a focused study plan.",
       steps: [
-        buildActionStep(1, "Find the exact stuck point", "Pick one problem you can't solve and mark where you get lost."),
-        buildActionStep(2, "Get one clear explanation", "Ask a teacher, look for a short video, or find a worked example of that step."),
-        buildActionStep(3, "Practice three of the same kind", "Do it again on three similar problems before moving on."),
+        buildActionStep(
+          1,
+          "Find the exact stuck point",
+          "Pick one problem you can't solve and mark where you get lost.",
+        ),
+        buildActionStep(
+          2,
+          "Get one clear explanation",
+          "Ask a teacher, look for a short video, or find a worked example of that step.",
+        ),
+        buildActionStep(
+          3,
+          "Practice three of the same kind",
+          "Do it again on three similar problems before moving on.",
+        ),
       ],
       followUps: [
         "What's the specific topic or skill?",
@@ -148,12 +231,28 @@ const profiles: DomainProfile[] = [
         "What have you already tried?",
       ],
       suggestedTools: [
-        buildTool("notes", "Study notes", "Turn the topic into concise notes that you can review later."),
-        buildTool("quiz", "Practice quiz", "Create a short quiz around the weak area so you can test yourself."),
-        buildTool("plan", "Study plan", "Create a focused plan for the next few study sessions."),
+        buildTool(
+          "notes",
+          "Study notes",
+          "Turn the topic into concise notes that you can review later.",
+        ),
+        buildTool(
+          "quiz",
+          "Practice quiz",
+          "Create a short quiz around the weak area so you can test yourself.",
+        ),
+        buildTool(
+          "study_plan",
+          "Study plan",
+          "Create a focused plan for the next few study sessions.",
+        ),
       ],
       resources: [
-        buildResource("Learning support", "Keep this workspace ready for explanations, notes, and practice questions.", "resource"),
+        buildResource(
+          "Learning support",
+          "Keep this workspace ready for explanations, notes, and practice questions.",
+          "resource",
+        ),
       ],
     }),
   },
@@ -167,9 +266,21 @@ const profiles: DomainProfile[] = [
         "This is a situation involving other people. The useful next move is usually one clear conversation, not a plan built alone.",
       userIntent: "Frame the issue clearly and decide the next responsible action.",
       steps: [
-        buildActionStep(1, "Write down what you want", "One sentence: what would 'better' look like for you?"),
-        buildActionStep(2, "Pick who to talk to first", "The one person whose action would change the most."),
-        buildActionStep(3, "Have a short, calm conversation", "Say what you see, what you need, and listen to their side."),
+        buildActionStep(
+          1,
+          "Write down what you want",
+          "One sentence: what would 'better' look like for you?",
+        ),
+        buildActionStep(
+          2,
+          "Pick who to talk to first",
+          "The one person whose action would change the most.",
+        ),
+        buildActionStep(
+          3,
+          "Have a short, calm conversation",
+          "Say what you see, what you need, and listen to their side.",
+        ),
       ],
       followUps: [
         "Who else is affected?",
@@ -177,11 +288,23 @@ const profiles: DomainProfile[] = [
         "What outcome would be good enough?",
       ],
       suggestedTools: [
-        buildTool("plan", "Community action plan", "Convert the situation into a practical plan with roles and next steps."),
-        buildTool("checklist", "Action checklist", "Create a concise checklist of who should do what and when."),
+        buildTool(
+          "project_plan",
+          "Community action plan",
+          "Convert the situation into a practical plan with roles and next steps.",
+        ),
+        buildTool(
+          "checklist",
+          "Action checklist",
+          "Create a concise checklist of who should do what and when.",
+        ),
       ],
       resources: [
-        buildResource("Community coordination", "Use this workspace to track the people, conversations, and next steps involved.", "service"),
+        buildResource(
+          "Community coordination",
+          "Use this workspace to track the people, conversations, and next steps involved.",
+          "service",
+        ),
       ],
     }),
   },
@@ -196,9 +319,21 @@ const productivityProfile: DomainProfile = {
       "Situations like this usually feel bigger than they are because everything is mixed together. Separating what's known from what's uncertain is what unblocks the next move.",
     userIntent: "Reduce the problem into a clear, actionable plan.",
     steps: [
-      buildActionStep(1, "Write down what you already know", "Facts only — no worries, no what-ifs."),
-      buildActionStep(2, "Name the single biggest unknown", "The one answer that would change what you'd do next."),
-      buildActionStep(3, "Take one small action today", "The smallest step that produces new information."),
+      buildActionStep(
+        1,
+        "Write down what you already know",
+        "Facts only — no worries, no what-ifs.",
+      ),
+      buildActionStep(
+        2,
+        "Name the single biggest unknown",
+        "The one answer that would change what you'd do next.",
+      ),
+      buildActionStep(
+        3,
+        "Take one small action today",
+        "The smallest step that produces new information.",
+      ),
     ],
     followUps: [
       "What outcome would count as 'resolved'?",
@@ -206,11 +341,23 @@ const productivityProfile: DomainProfile = {
       "What have you already tried?",
     ],
     suggestedTools: [
-      buildTool("plan", "Project plan", "Turn the problem into a manageable project plan with clear milestones."),
-      buildTool("checklist", "Task checklist", "Create a checklist of the next small actions to take."),
+      buildTool(
+        "project_plan",
+        "Project plan",
+        "Turn the problem into a manageable project plan with clear milestones.",
+      ),
+      buildTool(
+        "checklist",
+        "Task checklist",
+        "Create a checklist of the next small actions to take.",
+      ),
     ],
     resources: [
-      buildResource("Planning support", "Use this workspace to turn a vague problem into an actionable plan.", "resource"),
+      buildResource(
+        "Planning support",
+        "Use this workspace to turn a vague problem into an actionable plan.",
+        "resource",
+      ),
     ],
   }),
 };
@@ -237,7 +384,10 @@ function analyzeText(text: string, urgencyHint?: LifelineUrgency): LifelineAnaly
     suggestedTools: parts.suggestedTools,
     followUpQuestions: parts.followUps,
     resources: parts.resources,
-    safetyNote: urgency === "high" ? "This may be serious. If someone is in immediate danger, contact local emergency services or a qualified professional right now." : undefined,
+    safetyNote:
+      urgency === "high"
+        ? "This may be serious. If someone is in immediate danger, contact local emergency services or a qualified professional right now."
+        : undefined,
   });
 
   return analysis;
@@ -251,7 +401,11 @@ function continueAnalysis(ctx: LifelineAIContext): LifelineAnalysis {
 
   const obsCount = situation.observations.length + 1;
   const updatedSteps: LifelineActionStep[] = [
-    buildActionStep(1, "Factor in the new observation", `You reported: “${firstSentence(observation, 120)}”. Adjust the plan around this before continuing.`),
+    buildActionStep(
+      1,
+      "Factor in the new observation",
+      `You reported: “${firstSentence(observation, 120)}”. Adjust the plan around this before continuing.`,
+    ),
     ...base.actionPlan.slice(0, 3).map((s, i) => ({ ...s, step: i + 2 })),
   ];
 

@@ -1,18 +1,8 @@
-import type {
-  LifelineActionStep,
-  LifelineAnalysis,
-  LifelineDomain,
-  LifelineResource,
-  LifelineSuggestedTool,
-  LifelineUrgency,
-} from "../types";
-import { normalizeAnalysis } from "./schema";
-import {
-  AIProviderError,
-  type LifelineAIContext,
-  type LifelineAIProvider,
-} from "./provider";
+import type { LifelineAnalysis, LifelineDomain, LifelineUrgency } from "../types";
+import { normalizeAnalysis, structuredProblemAnalysisSchema } from "./schema";
+import { AIProviderError, type LifelineAIContext, type LifelineAIProvider } from "./provider";
 import { AIServiceError, generateAIResponse, isAIConfigured } from "@/lib/ai/ai-client";
+import { offlineProvider } from "./offline-provider";
 
 const DOMAINS: LifelineDomain[] = [
   "education",
@@ -39,21 +29,39 @@ Rules:
   emergency services or a qualified professional now.
 - If continuing an existing situation, take the previous analysis and prior
   observations into account and update your understanding.
-- Return a structured JSON object with these fields:
-  - category: "education" | "healthcare" | "agriculture" | "productivity" | "community" | "general"
-  - problemSummary: string
-  - userIntent: string
-  - urgency: "low" | "medium" | "high"
-  - explanation: string
-  - actionPlan: array of objects with title, description, optional timeframe, optional status
-  - suggestedTools: array of objects with type, title, description
-  - followUpQuestions: array of strings
-  - resources: array of objects with title, description, optional kind, optional locationHint
-  - safetyNote: optional string
+- Return a single JSON object and nothing else. No markdown fences, no prose,
+  no explanation outside the JSON.
+- Match this exact schema:
+  {
+    "category": "education | healthcare | agriculture | productivity | community | general",
+    "problemSummary": "A concise explanation of the user's actual problem",
+    "userIntent": "What the user is trying to achieve",
+    "urgency": "low | medium | high",
+    "actionPlan": [
+      {
+        "id": "unique-id",
+        "title": "Action step",
+        "description": "What the user should do",
+        "timeframe": "Optional timeframe",
+        "status": "pending"
+      }
+    ],
+    "suggestedTools": [
+      {
+        "id": "unique-id",
+        "type":
+        "notes | quiz | scenarios | explanation | study_plan | checklist | project_plan | resource_finder",
+        "title": "Tool title",
+        "description": "What this tool does"
+      }
+    ],
+    "followUpQuestions": [],
+    "resources": []
+  }
 - Prefer 3-5 action steps and 2-4 suggested tools when appropriate.
 - Use the category field for the primary domain, and keep the user-facing fields plain language.
-
-Return ONLY a single JSON object, no prose, no markdown fences.`;
+- Ensure every actionPlan item has an id string and status set to "pending".
+- Ensure every suggestedTools item has a type from the allowed list.`;
 
 function buildUserMessage(ctx: LifelineAIContext): string {
   if (ctx.situation && ctx.newObservation) {
@@ -93,106 +101,30 @@ function extractJson(text: string): unknown {
   }
 }
 
-function pickString(v: unknown, fallback = ""): string {
-  return typeof v === "string" ? v : fallback;
-}
-
-function coerceDomain(v: unknown): LifelineDomain {
-  return DOMAINS.includes(v as LifelineDomain) ? (v as LifelineDomain) : "general";
-}
-
-function coerceUrgency(v: unknown): LifelineUrgency {
-  return URGENCIES.includes(v as LifelineUrgency) ? (v as LifelineUrgency) : "medium";
-}
-
-function coerceActionPlan(v: unknown): LifelineActionStep[] {
-  if (!Array.isArray(v)) return [];
-  return v
-    .map((raw, i): LifelineActionStep | null => {
-      if (!raw || typeof raw !== "object") return null;
-      const r = raw as Record<string, unknown>;
-      const title = pickString(r.title).trim();
-      const description = pickString(r.description).trim();
-      if (!title && !description) return null;
-      const stepNum = typeof r.step === "number" ? r.step : i + 1;
-      return {
-        id: `${stepNum}-${i}`,
-        step: stepNum,
-        title: title || `Step ${stepNum}`,
-        description: description || title,
-        timeframe: typeof r.timeframe === "string" ? r.timeframe : undefined,
-        status: r.status === "completed" || r.status === "in_progress" ? r.status : "pending",
-      };
-    })
-    .filter((s): s is LifelineActionStep => s !== null);
-}
-
-function coerceSuggestedTools(v: unknown): LifelineSuggestedTool[] {
-  if (!Array.isArray(v)) return [];
-  return v
-    .map((raw, i): LifelineSuggestedTool | null => {
-      if (!raw || typeof raw !== "object") return null;
-      const r = raw as Record<string, unknown>;
-      const title = pickString(r.title).trim();
-      const description = pickString(r.description).trim();
-      const type = pickString(r.type).trim();
-      if (!title || !description || !type) return null;
-      return {
-        id: `${type}-${i}`,
-        type,
-        title,
-        description,
-      };
-    })
-    .filter((s): s is LifelineSuggestedTool => s !== null);
-}
-
-function coerceResources(v: unknown): LifelineResource[] {
-  if (!Array.isArray(v)) return [];
-  return v
-    .map((raw, i): LifelineResource | null => {
-      if (!raw || typeof raw !== "object") return null;
-      const r = raw as Record<string, unknown>;
-      const title = pickString(r.title).trim();
-      const description = pickString(r.description).trim();
-      if (!title || !description) return null;
-      return {
-        id: `${i}-${title}`,
-        title,
-        description,
-        kind: (r.kind as LifelineResource["kind"]) ?? "resource",
-        locationHint: typeof r.locationHint === "string" ? r.locationHint : undefined,
-      };
-    })
-    .filter((s): s is LifelineResource => s !== null);
-}
-
-function validate(raw: unknown): LifelineAnalysis {
-  if (!raw || typeof raw !== "object") {
-    throw new AIProviderError("Gemma response is not an object");
-  }
-
-  const r = raw as Record<string, unknown>;
-  const summary = pickString(r.problemSummary).trim();
-  const explanation = pickString(r.explanation).trim();
-  if (!summary || !explanation) {
-    throw new AIProviderError("Gemma response missing summary/explanation");
-  }
-
+function buildFallbackAnalysis(ctx: LifelineAIContext): LifelineAnalysis {
+  const summary =
+    ctx.input.trim() || "The user described a situation that needs practical guidance.";
   return normalizeAnalysis({
-    category: coerceDomain(r.category ?? r.domain),
-    domain: coerceDomain(r.domain ?? r.category),
-    problemSummary: summary,
-    userIntent: pickString(r.userIntent, "Understand the problem and plan the next step.").trim(),
-    urgency: coerceUrgency(r.urgency),
-    explanation,
-    actionPlan: coerceActionPlan(r.actionPlan),
-    suggestedTools: coerceSuggestedTools(r.suggestedTools),
-    followUpQuestions: Array.isArray(r.followUpQuestions)
-      ? r.followUpQuestions.map((q) => pickString(q).trim()).filter((q) => q.length > 0)
-      : [],
-    resources: coerceResources(r.resources),
-    safetyNote: pickString(r.safetyNote).trim() || undefined,
+    category: "general",
+    domain: "general",
+    problemSummary: summary.slice(0, 240),
+    userIntent: "Understand the problem and identify the next helpful action.",
+    urgency: "medium",
+    explanation:
+      "The AI response did not arrive in the expected structured format, so a concise " +
+      "fallback analysis was generated to keep the workflow moving.",
+    actionPlan: [
+      {
+        id: "fallback-step-1",
+        title: "Clarify the issue",
+        description: "Write down the specific problem and what you have already tried.",
+        timeframe: "Today",
+        status: "pending",
+      },
+    ],
+    suggestedTools: [],
+    followUpQuestions: ["What is the most important part of this problem to solve first?"],
+    resources: [],
   });
 }
 
@@ -218,12 +150,23 @@ export const gemmaProvider: LifelineAIProvider = {
       });
     } catch (err) {
       if ((err as { name?: string })?.name === "AbortError") throw err;
-      if (err instanceof AIServiceError) {
-        throw new AIProviderError(err.message, err);
-      }
-      throw new AIProviderError("Could not reach AI service", err);
+      console.warn("Gemma request failed, falling back to offline analysis", err);
+      return offlineProvider.analyzeProblem(ctx, signal);
     }
 
-    return validate(extractJson(text));
+    try {
+      const parsed = extractJson(text);
+      const validation = structuredProblemAnalysisSchema.safeParse(parsed);
+
+      if (!validation.success) {
+        console.warn("Gemma returned invalid structured output", validation.error.flatten());
+        return offlineProvider.analyzeProblem(ctx, signal);
+      }
+
+      return normalizeAnalysis(validation.data);
+    } catch (error) {
+      console.warn("Falling back to plain-text-compatible analysis", error);
+      return buildFallbackAnalysis(ctx);
+    }
   },
 };
