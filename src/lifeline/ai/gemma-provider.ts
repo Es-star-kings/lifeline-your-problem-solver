@@ -9,6 +9,11 @@ import {
   type LifelineAIContext,
   type LifelineAIProvider,
 } from "./provider";
+import {
+  AIServiceError,
+  generateAIResponse,
+  isAIConfigured,
+} from "@/lib/ai/ai-client";
 
 const DOMAINS: LifelineDomain[] = [
   "education",
@@ -49,18 +54,6 @@ Return ONLY a single JSON object, no prose, no markdown fences, matching:
   "followUpQuestions": string[],// 2-4 questions that would sharpen the plan
   "safetyNote": string          // optional, only when urgency is high
 }`;
-
-function endpoint(): string | undefined {
-  const raw = (import.meta.env.VITE_GEMMA_ENDPOINT as string | undefined)?.trim();
-  return raw && raw.length > 0 ? raw : undefined;
-}
-
-function model(): string {
-  return (
-    (import.meta.env.VITE_GEMMA_MODEL as string | undefined)?.trim() ||
-    "gemma-3-4b-it"
-  );
-}
 
 function buildUserMessage(ctx: LifelineAIContext): string {
   if (ctx.situation && ctx.newObservation) {
@@ -176,56 +169,28 @@ export const gemmaProvider: LifelineAIProvider = {
   name: "Gemma",
 
   isAvailable() {
-    return endpoint() !== undefined;
+    return isAIConfigured();
   },
 
   async analyzeProblem(ctx, signal): Promise<LifelineAnalysis> {
-    const url = endpoint();
-    if (!url) {
+    if (!isAIConfigured()) {
       throw new AIProviderError("Gemma endpoint is not configured");
     }
 
-    let res: Response;
+    let text: string;
     try {
-      res = await fetch(url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
+      text = await generateAIResponse(buildUserMessage(ctx), {
+        systemPrompt: SYSTEM_PROMPT,
+        temperature: 0.3,
+        maxTokens: 1024,
         signal,
-        body: JSON.stringify({
-          model: model(),
-          temperature: 0.3,
-          response_format: { type: "json_object" },
-          messages: [
-            { role: "system", content: SYSTEM_PROMPT },
-            { role: "user", content: buildUserMessage(ctx) },
-          ],
-        }),
       });
     } catch (err) {
       if ((err as { name?: string })?.name === "AbortError") throw err;
-      throw new AIProviderError("Could not reach Gemma", err);
-    }
-
-    if (!res.ok) {
-      throw new AIProviderError(`Gemma request failed (${res.status})`);
-    }
-
-    let payload: unknown;
-    try {
-      payload = await res.json();
-    } catch (err) {
-      throw new AIProviderError("Gemma returned invalid JSON envelope", err);
-    }
-
-    const p = payload as {
-      choices?: Array<{ message?: { content?: string } }>;
-      content?: string;
-      text?: string;
-    };
-    const text =
-      p.choices?.[0]?.message?.content ?? p.content ?? p.text ?? "";
-    if (!text) {
-      throw new AIProviderError("Gemma returned empty content");
+      if (err instanceof AIServiceError) {
+        throw new AIProviderError(err.message, err);
+      }
+      throw new AIProviderError("Could not reach AI service", err);
     }
 
     return validate(extractJson(text));
