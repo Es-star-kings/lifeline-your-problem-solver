@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { lifelineEngine } from "@/lifeline/ai/engine";
+import { AI_UNAVAILABLE_MESSAGE } from "@/lib/ai/ai-client";
 import { examples } from "@/lifeline/examples";
 import { situationsStore } from "@/lifeline/storage/situations";
 import type { LifelineAnalysis, LifelineSituation } from "@/lifeline/types";
@@ -69,7 +70,8 @@ function Index() {
       const situation = situationsStore.create(input, result);
       navigate({ to: "/situation/$id", params: { id: situation.id } });
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Something went wrong.");
+      console.error(e);
+      setError(AI_UNAVAILABLE_MESSAGE);
     } finally {
       clearTimeout(t1);
       clearTimeout(t2);
